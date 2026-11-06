@@ -54,12 +54,18 @@ dialog input[type=checkbox]{width:auto;margin-right:6px}
 .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mut);margin:8px 0}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--c);margin-right:4px}
 #sheets{display:none}
+.po{display:none}
+body.ps .wrap{display:none}
+body.ps #sheets{display:block;background:#fff;color:#000;padding:70px 12px 20px;min-height:100vh}
+body.ps .sheet{max-width:860px;margin:0 auto 18px;padding:18px;border:1px solid #ccc;background:#fff;color:#000}
+#pbar{display:none;position:fixed;top:0;left:0;right:0;z-index:20;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top,0px));background:var(--card);border-bottom:1px solid var(--bd)}
+body.ps #pbar{display:flex}
 .sheet h2{margin:0 0 6px;font-size:18px}
 .meta{display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;font-size:13px;margin-bottom:8px}
 .rows td{height:22px;border:1px solid #000}
 .rows th{border:1px solid #000;font-size:11px;color:#000}
 .sig{display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-top:10px}
-@media print{.noprint,.tabs{display:none!important}body{background:#fff;color:#000}.day{break-inside:avoid}body.ps .wrap,body.ps #toast{display:none!important}body.ps #sheets{display:block}.sheet{break-after:page;color:#000}.sheet:last-child{break-after:auto}}
+@media print{body.ps #pbar{display:none!important}body.ps #sheets{padding:0!important}.sheet{border:0!important;margin:0!important;padding:0!important;max-width:none!important}.po{display:inline!important}.noprint,.tabs{display:none!important}body{background:#fff;color:#000}.day{break-inside:avoid}body.ps .wrap,body.ps #toast{display:none!important}body.ps #sheets{display:block}.sheet{break-after:page;color:#000}.sheet:last-child{break-after:auto}}
 </style>
 </head>
 <body>
@@ -72,9 +78,10 @@ dialog input[type=checkbox]{width:auto;margin-right:6px}
       <button id="auto" class="p">Auto-schedule month</button>
       <button id="add">+ Add</button>
       <button id="una">Reader unavailable</button>
-      <button id="prt">Print schedule</button>
-      <button id="psh">Print reading sheets</button>
-      <button id="psr">Print reader schedule</button>
+      <button id="imp">Import masterlist</button>
+      <button id="prt">Print</button>
+      
+      
     </div>
   </div>
   <div class="stats" id="stats"></div>
@@ -127,6 +134,23 @@ dialog input[type=checkbox]{width:auto;margin-right:6px}
   <label>To date</label><input type="date" id="st">
   <div class="row" style="margin-top:14px;justify-content:flex-end"><button id="scx">Cancel</button><button id="sgo" class="p">Print</button></div>
 </dialog>
+<dialog id="idlg" style="max-width:640px">
+  <b>Import masterlist</b>
+  <div class="sub">Paste rows copied from Excel: RouteID, Brgy Description, No. of Meter, Meter Reader, Meter Reader Id, Order, Group Schedule. This replaces all routes, readers and schedules.</div>
+  <label>Masterlist (tab separated)</label><textarea id="it" rows="9" style="width:100%;font:12px monospace;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px"></textarea>
+  <label>Daily capacity per reader (meters)</label><input type="number" id="ic" min="1" value="250">
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button id="icx">Cancel</button><button id="igo" class="p">Import</button></div>
+</dialog>
+<dialog id="mdlg">
+  <b>Print</b>
+  <div style="display:grid;gap:8px;margin-top:10px">
+    <button id="plist" style="text-align:left">Schedule list<br><span class="sub">All months, uses the current reader and status filters</span></button>
+    <button id="psr" style="text-align:left">Reader schedule<br><span class="sub">One page per reader, all months by default</span></button>
+    <button id="psh" style="text-align:left">Reading sheets<br><span class="sub">Blank paper sheets per route with rows for readings</span></button>
+    <button id="mcx">Cancel</button>
+  </div>
+</dialog>
+<div id="pbar"><b>Print preview</b><span class="sub">If the print window does not open, open this page in its own browser tab and press Ctrl+P (Cmd+P on Mac).</span><span class="row"><button id="pgo2" class="p">Print</button><button id="pcl">Close preview</button></span></div>
 <div id="sheets"></div>
 <div id="toast"></div>
 <script>
@@ -144,7 +168,7 @@ function seed(){
 function load(){try{const x=localStorage.getItem('mrs-v1');if(x)return JSON.parse(x)}catch(e){}return seed()}
 let S=load();S.off=S.off||[];S.hol=S.hol||[];S.rr=S.rr||[];S.cfg=S.cfg||{enc:2};
 function save(){try{localStorage.setItem('mrs-v1',JSON.stringify(S))}catch(e){}}
-let M=today.slice(0,7),tab='cal',editId=null,fR='',fS='';
+let M=today.slice(0,7),tab='cal',editId=null,fR='',fS='',fP='all';
 const rt=id=>S.routes.find(r=>r.id===id)||S.rr.find(r=>r.id===id)||{name:'(removed)',meters:0};
 const rd=id=>S.readers.find(r=>r.id===id)||{name:'(removed)',cap:0};
 const ini=n=>n.split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
@@ -157,7 +181,7 @@ function stats(){
   const meters=m.reduce((a,x)=>a+rt(x.routeId).meters,0);
   const enc=m.filter(x=>x.status===4).length;
   const od=S.sched.filter(overdue).length;
-  const un=S.routes.filter(r=>!m.some(x=>x.routeId===r.id)).length;
+  const un=S.routes.filter(r=>!S.sched.some(x=>(x.routeId===r.id||x.parent===r.id)&&x.date>=M+'-01')).length;
   $('#stats').innerHTML=[[m.length,'Routes scheduled'],[meters.toLocaleString(),'Meters to read'],[m.length?Math.round(enc/m.length*100)+'%':'0%','Encoded'],[od,'Overdue (not encoded)'],[un,'Routes unscheduled']].map(a=>`<div class="stat"><b>${a[0]}</b><span>${a[1]}</span></div>`).join('');
 }
 function tabs(){
@@ -177,21 +201,21 @@ function cal(){
       items.map(x=>`<button class="chip s${x.status} ${overdue(x)?'od':''}" data-id="${x.id}" title="${esc(rt(x.routeId).name)} · ${esc(rd(x.readerId).name)} · ${ST[x.status]}">${esc(rt(x.routeId).name)} · ${esc(ini(rd(x.readerId).name))}</button>`).join('')+'</div>';
   }
   h+='</div></div>';
-  const un=S.routes.filter(r=>!S.sched.some(x=>x.routeId===r.id&&x.date.startsWith(M)));
+  const un=S.routes.filter(r=>!S.sched.some(x=>(x.routeId===r.id||x.parent===r.id)&&x.date>=M+'-01'));
   h+=legend()+(un.length?`<div class="sub">Not yet scheduled this month: ${un.map(r=>esc(r.name)).join(', ')}</div>`:'<div class="sub">All routes are scheduled for this month.</div>');
   $('#view').innerHTML=h;
   document.querySelectorAll('.day').forEach(e=>e.onclick=ev=>{if(ev.target.closest('.chip'))return;open_(null,e.dataset.d)});
   document.querySelectorAll('.chip').forEach(e=>e.onclick=()=>open_(e.dataset.id));
 }
 function list(){
-  let a=S.sched.filter(x=>x.date.startsWith(M)&&(!fR||x.readerId===fR)&&(fS===''||String(x.status)===fS)).sort((p,q)=>p.date.localeCompare(q.date));
-  let h=`<div class="row noprint" style="margin-bottom:8px"><select id="flr"><option value="">All readers</option>${S.readers.map(r=>`<option value="${r.id}" ${fR===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select><select id="fls"><option value="">All statuses</option>${ST.map((s,i)=>`<option value="${i}" ${fS===String(i)?'selected':''}>${s}</option>`).join('')}</select></div>`;
+  let a=S.sched.filter(x=>(fP==='all'||x.date.startsWith(M))&&(!fR||x.readerId===fR)&&(fS===''||String(x.status)===fS)).sort((p,q)=>p.date.localeCompare(q.date));
+  let h=`<div class="row noprint" style="margin-bottom:8px"><select id="flp"><option value="all" ${fP==='all'?'selected':''}>All months</option><option value="m" ${fP==='m'?'selected':''}>Selected month only</option></select><select id="flr"><option value="">All readers</option>${S.readers.map(r=>`<option value="${r.id}" ${fR===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select><select id="fls"><option value="">All statuses</option>${ST.map((s,i)=>`<option value="${i}" ${fS===String(i)?'selected':''}>${s}</option>`).join('')}</select></div>`;
   h+='<div class="scroll"><table><tr><th>Date</th><th>Route</th><th>Meters</th><th>Reader</th><th>Day load</th><th>Status</th><th class="noprint"></th></tr>';
   h+=a.map(x=>{const L=load_(x.date,x.readerId),c=rd(x.readerId).cap,dt=new Date(x.date+'T00:00');
-    return `<tr><td>${dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}${overdue(x)?' <span class="bad">overdue</span>':''}</td><td>${esc(rt(x.routeId).name)}${x.note?`<div class="sub">${esc(x.note)}</div>`:''}</td><td>${rt(x.routeId).meters}</td><td>${esc(rd(x.readerId).name)}${avail(x.readerId,x.date)?'':' <span class="bad">(unavailable)</span>'}</td><td class="${L>c?'bad':''}">${L}/${c}</td><td><select data-st="${x.id}" class="noprint">${ST.map((s,i)=>`<option value="${i}" ${x.status===i?'selected':''}>${s}</option>`).join('')}</select></td><td class="noprint"><button data-ed="${x.id}">Edit</button></td></tr>`}).join('')||'<tr><td colspan="7" class="sub">Nothing scheduled. Use Auto-schedule month or + Add.</td></tr>';
+    return `<tr><td>${dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}${overdue(x)?' <span class="bad">overdue</span>':''}</td><td>${esc(rt(x.routeId).name)}${x.note?`<div class="sub">${esc(x.note)}</div>`:''}</td><td>${rt(x.routeId).meters}</td><td>${esc(rd(x.readerId).name)}${avail(x.readerId,x.date)?'':' <span class="bad">(unavailable)</span>'}</td><td class="${L>c?'bad':''}">${L}/${c}</td><td><span class="po">${ST[x.status]}</span><select data-st="${x.id}" class="noprint">${ST.map((s,i)=>`<option value="${i}" ${x.status===i?'selected':''}>${s}</option>`).join('')}</select></td><td class="noprint"><button data-ed="${x.id}">Edit</button></td></tr>`}).join('')||'<tr><td colspan="7" class="sub">Nothing scheduled. Use Auto-schedule month or + Add.</td></tr>';
   h+='</table></div>';
   $('#view').innerHTML=h;
-  $('#flr').onchange=e=>{fR=e.target.value;render()};$('#fls').onchange=e=>{fS=e.target.value;render()};
+  $('#flp').onchange=e=>{fP=e.target.value;render()};$('#flr').onchange=e=>{fR=e.target.value;render()};$('#fls').onchange=e=>{fS=e.target.value;render()};
   document.querySelectorAll('[data-st]').forEach(e=>e.onchange=()=>{S.sched.find(x=>x.id===e.dataset.st).status=+e.value;save();render()});
   document.querySelectorAll('[data-ed]').forEach(e=>e.onclick=()=>open_(e.dataset.ed));
 }
@@ -206,7 +230,7 @@ function workload(){
 }
 function setup(){
   $('#view').innerHTML=`<div class="grid2"><div class="card"><h3>Meter readers</h3><table>${S.readers.map(r=>`<tr><td><input data-rn="${r.id}" value="${esc(r.name)}"></td><td><input data-rc="${r.id}" type="number" min="1" value="${r.cap}" style="width:80px"></td><td><button class="d" data-rx="${r.id}">✕</button></td></tr>`).join('')}</table><div class="sub">Name · meters per day</div><div class="row" style="margin-top:8px"><input id="nrn" placeholder="New reader name"><button id="nra">Add</button></div></div>
-  <div class="card"><h3>Routes / areas</h3><table>${S.routes.map(r=>`<tr><td><input data-tn="${r.id}" value="${esc(r.name)}"></td><td><input data-tm="${r.id}" type="number" min="1" value="${r.meters}" style="width:80px"></td><td><button class="d" data-tx="${r.id}">✕</button></td></tr>`).join('')}</table><div class="sub">Name · number of meters</div><div class="row" style="margin-top:8px"><input id="ntn" placeholder="New route name"><input id="ntm" type="number" placeholder="Meters" style="width:90px"><button id="nta">Add</button></div></div></div>
+  <div class="card"><h3>Routes / areas</h3><table>${S.routes.map(r=>`<tr><td><input data-tn="${r.id}" value="${esc(r.name)}"></td><td><input data-tm="${r.id}" type="number" min="1" value="${r.meters}" style="width:80px"></td><td><select data-tr="${r.id}"><option value="">Any reader</option>${S.readers.map(x=>`<option value="${x.id}" ${r.readerId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td><td><button class="d" data-tx="${r.id}">✕</button></td></tr>`).join('')}</table><div class="sub">Name · number of meters</div><div class="row" style="margin-top:8px"><input id="ntn" placeholder="New route name"><input id="ntm" type="number" placeholder="Meters" style="width:90px"><button id="nta">Add</button></div></div></div>
   <div class="card" style="margin-top:16px"><h3>Non-reading days and deadlines</h3><div class="row"><input type="date" id="hd"><input id="hn" placeholder="Holiday name"><button id="hadd">Add day off</button></div>${S.hol.length?'<table>'+[...S.hol].sort((a,b)=>a.d.localeCompare(b.d)).map(h=>`<tr><td>${h.d}</td><td>${esc(h.name)}</td><td><button class="d" data-hx="${h.id}">Remove</button></td></tr>`).join('')+'</table>':''}<div class="row" style="margin-top:10px"><span>Encoding deadline:</span><input id="enc" type="number" min="0" max="14" value="${S.cfg.enc}" style="width:70px"><span class="sub">days after the reading date</span></div><div class="sub">Sundays are always non-reading. Adding a day off moves that day unfinished routes to the next available day.</div></div>
   <div class="card" style="margin-top:16px"><h3>Reader unavailability</h3>${S.off.length?'<table>'+S.off.map(o=>`<tr><td>${esc(rd(o.readerId).name)}</td><td>${o.from===o.to?o.from:o.from+' to '+o.to}</td><td class="sub">${esc(o.reason||'')}</td><td><button class="d" data-ox="${o.id}">Remove</button></td></tr>`).join('')+'</table>':'<div class="sub">None recorded. Use the Reader unavailable button at the top.</div>'}<div class="sub" style="margin-top:6px">Removing an entry does not move schedules back.</div></div>
   <div class="card" style="margin-top:16px"><h3>Clear schedules</h3><div class="sub" style="margin-bottom:8px">Readers and routes are kept. You can undo right after clearing.</div><div class="row"><button class="d" id="clm">Clear this month (${M})</button><button class="d" id="cla">Clear all schedules</button></div></div>
@@ -248,11 +272,11 @@ function auto(){
   const [y,mo]=M.split('-').map(Number),days=[];
   for(let d=new Date(y,mo-1,1);d.getMonth()===mo-1;d.setDate(d.getDate()+1))if(d.getDay()!==0&&!isHol(ymd(d)))days.push(ymd(d));
   const from=M===today.slice(0,7)?days.filter(d=>d>=today):days,pool=from.length?from:days;
-  const todo=S.routes.filter(r=>!S.sched.some(x=>x.routeId===r.id&&x.date.startsWith(M))).sort((a,b)=>b.meters-a.meters);
+  const todo=S.routes.filter(r=>!S.sched.some(x=>(x.routeId===r.id||x.parent===r.id)&&x.date>=M+'-01')).sort((a,b)=>b.meters-a.meters);
   if(!todo.length)return toast('All routes already scheduled this month.');
   if(!S.readers.length)return toast('Add readers in Setup first.');
   let n=0;
-  todo.forEach(r=>{
+  const fx=todo.filter(r=>r.readerId&&S.readers.some(x=>x.id===r.readerId));n+=schedFixed(fx);todo.filter(r=>!fx.includes(r)).forEach(r=>{
     let best=null;
     for(const d of pool){
       const c=S.readers.filter(rr=>avail(rr.id,d)).map(rr=>({rr,l:load_(d,rr.id)})).filter(z=>z.l+r.meters<=z.rr.cap).sort((a,b)=>a.l-b.l)[0];
@@ -263,7 +287,7 @@ function auto(){
   });
   save();render();toast(`Scheduled ${n} route${n>1?'s':''}. Adjust by clicking any entry.`);
 }
-$('#auto').onclick=auto;$('#prt').onclick=()=>window.print();
+$('#auto').onclick=auto;$('#prt').onclick=()=>$('#mdlg').showModal();
 $('#amode').value=S.cfg.mode||'fill';$('#amode').onchange=e=>{S.cfg.mode=e.target.value;save()};
 $('#psh').onclick=()=>{
   $('#pr').innerHTML='<option value="">All readers</option>'+S.readers.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
@@ -272,9 +296,90 @@ $('#psh').onclick=()=>{
 $('#pcx').onclick=()=>$('#pdlg').close();
 $('#psr').onclick=()=>{
   $('#sr').innerHTML='<option value="">All readers (one page each)</option>'+S.readers.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
-  const [y,mo]=M.split('-').map(Number);$('#sf').value=M+'-01';$('#st').value=ymd(new Date(y,mo,0));$('#sdlg').showModal();
+  const ds=S.sched.map(x=>x.date).sort();$('#sf').value=ds[0]||today;$('#st').value=ds[ds.length-1]||today;$('#sdlg').showModal();
 };
 $('#scx').onclick=()=>$('#sdlg').close();
+const MASTER=`1330	Sitio Ta-ug-Sitio Mahayahay, Rizal Pal.	140	Mendoza, Victor	8	17	Area 2
+1314	Lomonon	557	Mendoza, Victor	8	13	Area 2
+0411	Libjo	467	Mendoza, Victor	8	1	Area 2
+0417	Can-untod	121	Mendoza, Victor	8	3	Area 2
+0419	San Isidro, Merida	148	Mendoza, Victor	8	5	Area 2
+0513	Matlang IV	156	Mendoza, Victor	8	7	Area 2
+1304	San Francisco Street	457	Mendoza, Victor	8	10	Area 2
+1306	Miscellaneous Street I	314	Mendoza, Victor	8	11	Area 2
+2200	Antipolo, Isabel, Leyte	170	Mendoza, Victor	8	14	Area 2
+2212	Puting Baybayon	37	Mendoza, Victor	8	15	Area 2
+0423	Sitio Utap, Calunangan, Merida	80	Mendoza, Victor	8	2	Area 2
+0503	Isabel Poblacion III	569	Mendoza, Victor	8	9	Area 2
+0510	Matlang I	568	Mendoza, Victor	8	6	Area 2
+1319	Tinabilan	238	Mendoza, Victor	8	12	Area 2
+2231	San Roque, Palompon	91	Mendoza, Victor	8	20	Area 2
+0414	Lundag-Canmole- Mainit- Mat-e	531	Mendoza, Victor	8	4	Area 2
+0512	Matlang III	225	Mendoza, Victor	8	8	Area 2
+1329	Sitio Dunggo-an, Rizal	33	Mendoza, Victor	8	19	Area 2
+2205	Calipataan	230	Mendoza, Victor	8	18	Area 2
+2218	Baguinbin, Palompon Leyte	217	Mendoza, Victor	8	16	Area 2`;
+function parseMaster(txt){
+  const out=[];
+  txt.split(/\r?\n/).map(l=>l.split('\t').map(s=>s.trim())).forEach(c=>{
+    const m=c.length>=3?parseInt(String(c[2]).replace(/,/g,'')):0;
+    if(c[0]&&m>0)out.push({code:c[0],name:c[1],meters:m,reader:c[3]||'',order:parseInt(c[5])||0,group:c[6]||''});
+  });
+  return out;
+}
+function importMaster(txt,cap){
+  const rows=parseMaster(txt);if(!rows.length)return 0;
+  const rm={};S.readers=[];S.routes=[];S.sched=[];S.rr=[];S.off=[];
+  rows.forEach(x=>{
+    if(x.reader&&!rm[x.reader]){rm[x.reader]={id:uid(),name:x.reader,cap};S.readers.push(rm[x.reader])}
+    S.routes.push({id:uid(),name:x.name,meters:x.meters,code:x.code,order:x.order,group:x.group,readerId:x.reader?rm[x.reader].id:''});
+  });
+  return rows.length;
+}
+function isOff(d){return new Date(d+'T00:00').getDay()===0||isHol(d)}
+function schedFixed(todo){
+  const by={};let n=0;
+  todo.forEach(r=>(by[r.readerId]=by[r.readerId]||[]).push(r));
+  const start=M===today.slice(0,7)?today:M+'-01';
+  Object.keys(by).forEach(rid=>{
+    const R=rd(rid);
+    let cur=start;while(isOff(cur))cur=addDays(cur,1);
+    by[rid].sort((a,b)=>(a.order||0)-(b.order||0)).forEach(r=>{
+      const es=[];let rem=r.meters,g=0;
+      while(rem>0){
+        const need=r.meters<=R.cap?r.meters:1;
+        while((!avail(rid,cur)||isOff(cur)||R.cap-load_(cur,rid)<need)&&g++<200)cur=addDays(cur,1);
+        if(g>=200)return;
+        const ch=Math.min(rem,R.cap-load_(cur,rid)),t={id:uid(),name:r.name,meters:ch,parent:r.id};
+        S.rr.push(t);
+        const e={id:uid(),routeId:t.id,parent:r.id,readerId:rid,date:cur,status:0,note:''};
+        S.sched.push(e);es.push({e,t});rem-=ch;
+      }
+      if(es.length===1){es[0].e.routeId=r.id;delete es[0].e.parent;S.rr=S.rr.filter(t=>t!==es[0].t)}
+      else es.forEach((z,i)=>{z.t.name=`${r.name} (part ${i+1} of ${es.length})`;z.e.note=`${z.t.meters} of ${r.meters} meters`});
+      n++;
+    });
+  });
+  return n;
+}
+$('#imp').onclick=()=>{if(!$('#it').dataset.i){$('#it').value=MASTER;$('#it').dataset.i=1}$('#ic').value=250;$('#idlg').showModal()};
+$('#icx').onclick=()=>$('#idlg').close();
+$('#mcx').onclick=()=>$('#mdlg').close();
+$('#mdlg').addEventListener('click',e=>{if(e.target.closest('button'))$('#mdlg').close()});
+$('#plist').onclick=()=>{
+  const a=S.sched.filter(x=>(!fR||x.readerId===fR)&&(fS===''||String(x.status)===fS)).sort((p,q)=>p.date.localeCompare(q.date));
+  if(!a.length)return toast('Nothing scheduled to print.');
+  const rows=a.map(x=>{const dt=new Date(x.date+'T00:00'),r=rt(x.routeId);return `<tr><td>${dt.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</td><td>${esc(r.name)}</td><td>${r.meters}</td><td>${esc(rd(x.readerId).name)}</td><td>${ST[x.status]}</td><td>${esc(x.note||'')}</td></tr>`}).join('');
+  $('#sheets').innerHTML=`<section class="sheet"><h2>Meter Reading Schedule</h2><div class="meta"><div><b>Entries:</b> ${a.length}</div><div><b>Printed:</b> ${today}</div></div><table class="rows"><tr><th>Date</th><th>Route / area</th><th>Meters</th><th>Reader</th><th>Status</th><th>Notes</th></tr>${rows}</table></section>`;
+  document.body.classList.add('ps');window.scrollTo(0,0);
+};
+$('#pgo2').onclick=()=>window.print();
+$('#pcl').onclick=()=>document.body.classList.remove('ps');
+$('#igo').onclick=()=>{
+  const n=importMaster($('#it').value,Math.max(1,+$('#ic').value||250));
+  if(!n)return toast('No valid rows found. Paste rows copied from Excel (tab separated).');
+  save();$('#idlg').close();tab='cal';render();toast(`Imported ${n} routes. Now click Auto-schedule month.`);
+};
 $('#sgo').onclick=()=>{
   const f=$('#sf').value,t=$('#st').value||f,rid=$('#sr').value;
   if(!f||t<f)return toast('Check the dates.');
@@ -288,8 +393,7 @@ $('#sgo').onclick=()=>{
     h+=`<section class="sheet"><h2>Meter Reader Schedule</h2><div class="meta"><div><b>Reader:</b> ${esc(r.name)}</div><div><b>Period:</b> ${f} to ${t}</div><div><b>Routes:</b> ${a.length}</div><div><b>Total meters:</b> ${tot.toLocaleString()}</div></div>${offs?`<div style="font-size:12px;margin-bottom:6px"><b>Unavailable:</b> ${offs}</div>`:''}<table class="rows"><tr><th>Date</th><th>Day</th><th>Route / area</th><th>Meters</th><th>Day load</th><th>Status</th><th>Notes</th></tr>${rows}</table><div class="sig"><span>Prepared by: ____________</span><span>Received by (reader): ____________</span><span>Printed: ${today}</span></div></section>`;
   });
   if(!h)return toast('No schedules found for that selection.');
-  $('#sheets').innerHTML=h;$('#sdlg').close();document.body.classList.add('ps');
-  setTimeout(()=>window.print(),50);
+  $('#sheets').innerHTML=h;$('#sdlg').close();document.body.classList.add('ps');window.scrollTo(0,0);
 };
 function avail(rid,d){return !S.off.some(o=>o.readerId===rid&&d>=o.from&&d<=o.to)}
 function offLine(k){const n=S.readers.filter(r=>!avail(r.id,k)).map(r=>ini(r.name));return n.length?`<div class="off">Off: ${esc(n.join(', '))}</div>`:''}
@@ -363,7 +467,7 @@ function alerts(){
   if(un.length)A.push({sev:1,t:`${un.length} route${pl(un.length)} assigned to an unavailable reader: ${nm(un)}`,fx:'Reassign',fix:()=>{let n=0;un.forEach(x=>{if(relocate(x))n++});done(`Reassigned ${n} of ${un.length}.`)}});
   const keys=[...new Set(S.sched.filter(x=>x.status<2&&x.date>=today&&load_(x.date,x.readerId)>rd(x.readerId).cap).map(x=>x.date+'|'+x.readerId))];
   if(keys.length)A.push({sev:0,t:`${keys.length} reader-day${pl(keys.length)} over capacity: ${keys.slice(0,3).map(k=>{const [d,r]=k.split('|');return esc(rd(r).name)+' '+d.slice(5)}).join(', ')}${keys.length>3?'...':''}`,fx:'Rebalance',fix:()=>{let n=0;keys.forEach(k=>{const [d,r]=k.split('|');S.sched.filter(x=>x.date===d&&x.readerId===r&&x.status<2).sort((a,b)=>rt(a.routeId).meters-rt(b.routeId).meters).forEach(x=>{if(load_(d,r)>rd(r).cap&&relocate(x))n++})});done(`Moved ${n} route${pl(n)} to balance the load.`)}});
-  const unr=S.routes.filter(r=>!S.sched.some(x=>x.routeId===r.id&&x.date.startsWith(M)));
+  const unr=S.routes.filter(r=>!S.sched.some(x=>(x.routeId===r.id||x.parent===r.id)&&x.date>=M+'-01'));
   if(unr.length&&S.readers.length)A.push({sev:0,t:`${unr.length} route${pl(unr.length)} not scheduled for this month: ${unr.slice(0,3).map(r=>esc(r.name)).join(', ')}${unr.length>3?'...':''}`,fx:'Auto-schedule',fix:auto});
   return A;
 }
@@ -400,6 +504,7 @@ function clearSched(all){
   $('#rdlg').showModal();
 }
 document.addEventListener('click',e=>{if(e.target.id==='clm')clearSched(false);if(e.target.id==='cla')clearSched(true)});
+document.addEventListener('change',e=>{const t=e.target.dataset&&e.target.dataset.tr;if(t){const r=S.routes.find(x=>x.id===t);if(r){r.readerId=e.target.value;save()}}});
 document.addEventListener('change',e=>{if(e.target.id==='enc'){S.cfg.enc=Math.max(0,Math.min(14,+e.target.value||0));save();render()}});
 document.addEventListener('click',e=>{const b=e.target.closest('[data-ox]');if(b){S.off=S.off.filter(o=>o.id!==b.dataset.ox);save();render()}});
 $('#pgo').onclick=()=>{
@@ -415,10 +520,9 @@ $('#pgo').onclick=()=>{
       h+=`<section class="sheet"><h2>Meter Reading Sheet</h2><div class="meta"><div><b>Route / area:</b> ${esc(r.name)}</div><div><b>Meter reader:</b> ${esc(rd(x.readerId).name)}</div><div><b>Reading date:</b> ${d.toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div><div><b>Meters assigned:</b> ${r.meters} (page ${p+1} of ${pages})</div></div><table class="rows"><tr><th>#</th><th>Account no.</th><th>Meter no.</th><th>Previous</th><th>Present</th><th>Time</th><th>Remarks</th></tr>${rows}</table><div class="sig"><span>Issued by: ____________</span><span>Received by: ____________</span><span>Returned on: __________</span></div></section>`;
     }
   });
-  $('#sheets').innerHTML=h;$('#pdlg').close();document.body.classList.add('ps');
-  setTimeout(()=>window.print(),50);
+  $('#sheets').innerHTML=h;$('#pdlg').close();document.body.classList.add('ps');window.scrollTo(0,0);
 };
-window.addEventListener('afterprint',()=>document.body.classList.remove('ps'));
+
 $('#mon').onchange=e=>{if(e.target.value){M=e.target.value;render()}};
 const shift=n=>{const [y,m]=M.split('-').map(Number),d=new Date(y,m-1+n,1);M=ymd(d).slice(0,7);render()};
 $('#prev').onclick=()=>shift(-1);$('#next').onclick=()=>shift(1);
