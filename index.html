@@ -57,7 +57,7 @@ dialog input[type=checkbox]{width:auto;margin-right:6px}
 .po{display:none}
 body.ps .wrap{display:none}
 body.ps #sheets{display:block;background:#fff;color:#000;padding:70px 12px 20px;min-height:100vh}
-body.ps .sheet{max-width:860px;margin:0 auto 18px;padding:18px;border:1px solid #ccc;background:#fff;color:#000}
+body.ps .sheet{max-width:1200px;margin:0 auto 18px;padding:18px;border:1px solid #ccc;background:#fff;color:#000}
 #pbar{display:none;position:fixed;top:0;left:0;right:0;z-index:20;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top,0px));background:var(--card);border-bottom:1px solid var(--bd)}
 body.ps #pbar{display:flex}
 .sheet h2{margin:0 0 6px;font-size:18px}
@@ -65,7 +65,22 @@ body.ps #pbar{display:flex}
 .rows td{height:22px;border:1px solid #000}
 .rows th{border:1px solid #000;font-size:11px;color:#000}
 .sig{display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-top:10px}
-@media print{body.ps #pbar{display:none!important}body.ps #sheets{padding:0!important}.sheet{border:0!important;margin:0!important;padding:0!important;max-width:none!important}.po{display:inline!important}.noprint,.tabs{display:none!important}body{background:#fff;color:#000}.day{break-inside:avoid}body.ps .wrap,body.ps #toast{display:none!important}body.ps #sheets{display:block}.sheet{break-after:page;color:#000}.sheet:last-child{break-after:auto}}
+.gantt-cell{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  body.ps #pbar{display:none!important}
+  body.ps #sheets{padding:0!important}
+  .sheet{border:0!important;margin:0!important;padding:0!important;max-width:none!important}
+  .po{display:inline!important}
+  .noprint,.tabs{display:none!important}
+  body{background:#fff;color:#000}
+  .day{break-inside:avoid}
+  body.ps .wrap,body.ps #toast{display:none!important}
+  body.ps #sheets{display:block}
+  .sheet{break-after:page;color:#000}
+  .sheet:last-child{break-after:auto}
+  .gantt-cell{print-color-adjust:exact!important;-webkit-print-color-adjust:exact!important}
+}
 </style>
 </head>
 <body>
@@ -79,6 +94,7 @@ body.ps #pbar{display:flex}
       <button id="add">+ Add</button>
       <button id="una">Reader unavailable</button>
       <button id="imp">Import masterlist</button>
+      <button id="act">Import actuals</button>
       <button id="prt">Print</button>
       
       
@@ -142,12 +158,52 @@ body.ps #pbar{display:flex}
   <div class="row" style="margin-top:14px;justify-content:flex-end"><button id="icx">Cancel</button><button id="igo" class="p">Import</button></div>
 </dialog>
 <dialog id="mdlg">
-  <b>Print</b>
+  <b>Print / Export</b>
   <div style="display:grid;gap:8px;margin-top:10px">
     <button id="plist" style="text-align:left">Schedule list<br><span class="sub">All months, uses the current reader and status filters</span></button>
     <button id="psr" style="text-align:left">Reader schedule<br><span class="sub">One page per reader, all months by default</span></button>
     <button id="psh" style="text-align:left">Reading sheets<br><span class="sub">Blank paper sheets per route with rows for readings</span></button>
+    <button id="pgan" style="text-align:left">Gantt schedule report<br><span class="sub">Blue = planned schedule · shows actual dates when imported</span></button>
+    <button id="pex" style="text-align:left">Export to Excel<br><span class="sub">Download schedule as .xls file</span></button>
     <button id="mcx">Cancel</button>
+  </div>
+</dialog>
+<dialog id="gdlg" style="max-width:420px">
+  <b>Gantt schedule report</b>
+  <div class="sub">Shows planned schedule as blue blocks. Import actual reading dates to compare.</div>
+  <label>Meter reader</label><select id="gr"></select>
+  <label>Route</label><select id="groute"></select>
+  <label>From date</label><input type="date" id="gf">
+  <label>To date</label><input type="date" id="gt">
+  <details style="margin-top:10px">
+    <summary style="cursor:pointer;font-size:13px;color:var(--mut)">Advanced options</summary>
+    <label style="margin-top:8px"><input type="checkbox" id="gwe" checked> Highlight weekends</label>
+    <label><input type="checkbox" id="gact" checked> Show actual reading dates</label>
+    <label><input type="checkbox" id="gclus" checked> Show cluster column</label>
+    <label>Sort by</label>
+    <select id="gsort">
+      <option value="date">Start date</option>
+      <option value="code">Route ID</option>
+      <option value="cluster">Cluster</option>
+      <option value="reader">Reader</option>
+      <option value="meters">Meters (high → low)</option>
+    </select>
+    <label>Day cell size</label>
+    <select id="gsize">
+      <option value="16">Compact</option>
+      <option value="20" selected>Normal</option>
+      <option value="26">Large</option>
+    </select>
+  </details>
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button id="gcx">Cancel</button><button id="ggo" class="p">Generate</button></div>
+</dialog>
+<dialog id="adlg" style="max-width:560px">
+  <b>Import actual reading dates</b>
+  <div class="sub">Paste rows: RouteID (or Route No.), Actual Reading Date. Optional Meter Reader column. Dates like Nov 7, 2026 or 2026-11-07 are accepted. This updates the Gantt comparison.</div>
+  <label>Actual dates (tab or comma separated)</label><textarea id="at" rows="8" style="width:100%;font:12px monospace;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px"></textarea>
+  <div class="row" style="margin-top:14px;justify-content:space-between">
+    <button id="aclr" class="d">Clear actuals</button>
+    <span class="row"><button id="acx">Cancel</button><button id="ago" class="p">Import</button></span>
   </div>
 </dialog>
 <div id="pbar"><b>Print preview</b><span class="sub">If the print window does not open, open this page in its own browser tab and press Ctrl+P (Cmd+P on Mac).</span><span class="row"><button id="pgo2" class="p">Print</button><button id="pcl">Close preview</button></span></div>
@@ -161,15 +217,16 @@ const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+Stri
 const uid=()=>Math.random().toString(36).slice(2,9);
 const today=ymd(new Date());
 function seed(){
-  const rd=['Reader A','Reader B','Reader C','Reader D'].map(n=>({id:uid(),name:n,cap:350}));
+  const rd=['Reader A','Reader B','Reader C','Reader D'].map(n=>({id:uid(),name:n,cap:250}));
   const rt=[['Poblacion',420],['San Isidro',310],['Bagong Silang',280],['Riverside',350],['Upper Hills',240],['Lower Hills',260],['Market Area',500],['Coastal Road',300],['Industrial Zone',180],['Sitio Centro',220]].map(a=>({id:uid(),name:a[0],meters:a[1]}));
   return {readers:rd,routes:rt,sched:[]};
 }
 function load(){try{const x=localStorage.getItem('mrs-v1');if(x)return JSON.parse(x)}catch(e){}return seed()}
-let S=load();S.off=S.off||[];S.hol=S.hol||[];S.rr=S.rr||[];S.cfg=S.cfg||{enc:2};
+let S=load();S.off=S.off||[];S.hol=S.hol||[];S.rr=S.rr||[];S.actuals=S.actuals||[];S.cfg=S.cfg||{enc:2};
 function save(){try{localStorage.setItem('mrs-v1',JSON.stringify(S))}catch(e){}}
 let M=today.slice(0,7),tab='cal',editId=null,fR='',fS='',fP='all';
 const rt=id=>S.routes.find(r=>r.id===id)||S.rr.find(r=>r.id===id)||{name:'(removed)',meters:0};
+const routeNo=r=>r.code||r.routeNo||r.routeNumber||'—';
 const rd=id=>S.readers.find(r=>r.id===id)||{name:'(removed)',cap:0};
 const ini=n=>n.split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
 const load_=(date,rid,skip)=>S.sched.filter(x=>x.date===date&&x.readerId===rid&&x.id!==skip).reduce((a,x)=>a+rt(x.routeId).meters,0);
@@ -210,9 +267,9 @@ function cal(){
 function list(){
   let a=S.sched.filter(x=>(fP==='all'||x.date.startsWith(M))&&(!fR||x.readerId===fR)&&(fS===''||String(x.status)===fS)).sort((p,q)=>p.date.localeCompare(q.date));
   let h=`<div class="row noprint" style="margin-bottom:8px"><select id="flp"><option value="all" ${fP==='all'?'selected':''}>All months</option><option value="m" ${fP==='m'?'selected':''}>Selected month only</option></select><select id="flr"><option value="">All readers</option>${S.readers.map(r=>`<option value="${r.id}" ${fR===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select><select id="fls"><option value="">All statuses</option>${ST.map((s,i)=>`<option value="${i}" ${fS===String(i)?'selected':''}>${s}</option>`).join('')}</select></div>`;
-  h+='<div class="scroll"><table><tr><th>Date</th><th>Route</th><th>Meters</th><th>Reader</th><th>Day load</th><th>Status</th><th class="noprint"></th></tr>';
+  h+='<div class="scroll"><table><tr><th>Date</th><th>Route No.</th><th>Route / area</th><th>Meters</th><th>Reader</th><th>Day load</th><th>Status</th><th class="noprint"></th></tr>';
   h+=a.map(x=>{const L=load_(x.date,x.readerId),c=rd(x.readerId).cap,dt=new Date(x.date+'T00:00');
-    return `<tr><td>${dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}${overdue(x)?' <span class="bad">overdue</span>':''}</td><td>${esc(rt(x.routeId).name)}${x.note?`<div class="sub">${esc(x.note)}</div>`:''}</td><td>${rt(x.routeId).meters}</td><td>${esc(rd(x.readerId).name)}${avail(x.readerId,x.date)?'':' <span class="bad">(unavailable)</span>'}</td><td class="${L>c?'bad':''}">${L}/${c}</td><td><span class="po">${ST[x.status]}</span><select data-st="${x.id}" class="noprint">${ST.map((s,i)=>`<option value="${i}" ${x.status===i?'selected':''}>${s}</option>`).join('')}</select></td><td class="noprint"><button data-ed="${x.id}">Edit</button></td></tr>`}).join('')||'<tr><td colspan="7" class="sub">Nothing scheduled. Use Auto-schedule month or + Add.</td></tr>';
+    return `<tr><td>${dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}${overdue(x)?' <span class="bad">overdue</span>':''}</td><td>${esc(routeNo(rt(x.routeId)))}</td><td>${esc(rt(x.routeId).name)}${x.note?`<div class="sub">${esc(x.note)}</div>`:''}</td><td>${rt(x.routeId).meters}</td><td>${esc(rd(x.readerId).name)}${avail(x.readerId,x.date)?'':' <span class="bad">(unavailable)</span>'}</td><td class="${L>c?'bad':''}">${L}/${c}</td><td><span class="po">${ST[x.status]}</span><select data-st="${x.id}" class="noprint">${ST.map((s,i)=>`<option value="${i}" ${x.status===i?'selected':''}>${s}</option>`).join('')}</select></td><td class="noprint"><button data-ed="${x.id}">Edit</button></td></tr>`}).join('')||'<tr><td colspan="8" class="sub">Nothing scheduled. Use Auto-schedule month or + Add.</td></tr>';
   h+='</table></div>';
   $('#view').innerHTML=h;
   $('#flp').onchange=e=>{fP=e.target.value;render()};$('#flr').onchange=e=>{fR=e.target.value;render()};$('#fls').onchange=e=>{fS=e.target.value;render()};
@@ -233,6 +290,11 @@ function setup(){
   <div class="card"><h3>Routes / areas</h3><table>${S.routes.map(r=>`<tr><td><input data-tn="${r.id}" value="${esc(r.name)}"></td><td><input data-tm="${r.id}" type="number" min="1" value="${r.meters}" style="width:80px"></td><td><select data-tr="${r.id}"><option value="">Any reader</option>${S.readers.map(x=>`<option value="${x.id}" ${r.readerId===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></td><td><button class="d" data-tx="${r.id}">✕</button></td></tr>`).join('')}</table><div class="sub">Name · number of meters</div><div class="row" style="margin-top:8px"><input id="ntn" placeholder="New route name"><input id="ntm" type="number" placeholder="Meters" style="width:90px"><button id="nta">Add</button></div></div></div>
   <div class="card" style="margin-top:16px"><h3>Non-reading days and deadlines</h3><div class="row"><input type="date" id="hd"><input id="hn" placeholder="Holiday name"><button id="hadd">Add day off</button></div>${S.hol.length?'<table>'+[...S.hol].sort((a,b)=>a.d.localeCompare(b.d)).map(h=>`<tr><td>${h.d}</td><td>${esc(h.name)}</td><td><button class="d" data-hx="${h.id}">Remove</button></td></tr>`).join('')+'</table>':''}<div class="row" style="margin-top:10px"><span>Encoding deadline:</span><input id="enc" type="number" min="0" max="14" value="${S.cfg.enc}" style="width:70px"><span class="sub">days after the reading date</span></div><div class="sub">Sundays are always non-reading. Adding a day off moves that day unfinished routes to the next available day.</div></div>
   <div class="card" style="margin-top:16px"><h3>Reader unavailability</h3>${S.off.length?'<table>'+S.off.map(o=>`<tr><td>${esc(rd(o.readerId).name)}</td><td>${o.from===o.to?o.from:o.from+' to '+o.to}</td><td class="sub">${esc(o.reason||'')}</td><td><button class="d" data-ox="${o.id}">Remove</button></td></tr>`).join('')+'</table>':'<div class="sub">None recorded. Use the Reader unavailable button at the top.</div>'}<div class="sub" style="margin-top:6px">Removing an entry does not move schedules back.</div></div>
+  <div class="card" style="margin-top:16px"><h3>Actual reading dates</h3>
+    ${S.actuals.length?`<div class="scroll"><table><tr><th>Route ID</th><th>Actual date</th><th>Reader</th><th></th></tr>${[...S.actuals].sort((a,b)=>a.date.localeCompare(b.date)||String(a.code).localeCompare(String(b.code))).map((a,i)=>`<tr><td>${esc(a.code)}</td><td>${a.date}</td><td class="sub">${esc(a.reader||'—')}</td><td><button class="d" data-ax="${i}">Remove</button></td></tr>`).join('')}</table></div>
+    <div class="row" style="margin-top:8px"><span class="sub">${S.actuals.length} record${S.actuals.length>1?'s':''} · used in Gantt report</span><button class="d" id="aclr2">Clear all actuals</button></div>`
+    :'<div class="sub">None imported yet. Use the <b>Import actuals</b> button at the top (Route ID + Actual Reading Date).</div>'}
+  </div>
   <div class="card" style="margin-top:16px"><h3>Clear schedules</h3><div class="sub" style="margin-bottom:8px">Readers and routes are kept. You can undo right after clearing.</div><div class="row"><button class="d" id="clm">Clear this month (${M})</button><button class="d" id="cla">Clear all schedules</button></div></div>
   <div class="sub" style="margin-top:12px">Data is saved in this browser only. Replace the sample names with your actual readers and routes.</div>`;
   const q=a=>document.querySelectorAll(a);
@@ -242,7 +304,13 @@ function setup(){
   q('[data-tm]').forEach(e=>e.onchange=()=>{rt(e.dataset.tm).meters=Math.max(1,+e.value||1);save()});
   q('[data-rx]').forEach(e=>e.onclick=()=>{if(S.sched.some(x=>x.readerId===e.dataset.rx))return toast('Reader has schedules. Reassign or delete them first.');S.readers=S.readers.filter(r=>r.id!==e.dataset.rx);save();render()});
   q('[data-tx]').forEach(e=>e.onclick=()=>{if(S.sched.some(x=>x.routeId===e.dataset.tx))return toast('Route has schedules. Delete them first.');S.routes=S.routes.filter(r=>r.id!==e.dataset.tx);save();render()});
-  $('#nra').onclick=()=>{const n=$('#nrn').value.trim();if(!n)return;S.readers.push({id:uid(),name:n,cap:350});save();render()};
+  q('[data-ax]').forEach(e=>e.onclick=()=>{
+    const sorted=[...S.actuals].sort((a,b)=>a.date.localeCompare(b.date)||String(a.code).localeCompare(String(b.code)));
+    const item=sorted[+e.dataset.ax];
+    if(item){S.actuals=S.actuals.filter(x=>!(x.code===item.code&&x.date===item.date&&(x.reader||'')===(item.reader||'')));save();render()}
+  });
+  const clr2=$('#aclr2');if(clr2)clr2.onclick=()=>{S.actuals=[];save();render();toast('All actual reading dates cleared.')};
+  $('#nra').onclick=()=>{const n=$('#nrn').value.trim();if(!n)return;S.readers.push({id:uid(),name:n,cap:250});save();render()};
   $('#nta').onclick=()=>{const n=$('#ntn').value.trim(),m=+$('#ntm').value;if(!n||!m)return toast('Enter a name and meter count.');S.routes.push({id:uid(),name:n,meters:m});save();render()};
 }
 function open_(id,date){
@@ -329,7 +397,7 @@ function parseMaster(txt){
 }
 function importMaster(txt,cap){
   const rows=parseMaster(txt);if(!rows.length)return 0;
-  const rm={};S.readers=[];S.routes=[];S.sched=[];S.rr=[];S.off=[];
+  const rm={};S.readers=[];S.routes=[];S.sched=[];S.rr=[];S.off=[];S.actuals=[];
   rows.forEach(x=>{
     if(x.reader&&!rm[x.reader]){rm[x.reader]={id:uid(),name:x.reader,cap};S.readers.push(rm[x.reader])}
     S.routes.push({id:uid(),name:x.name,meters:x.meters,code:x.code,order:x.order,group:x.group,readerId:x.reader?rm[x.reader].id:''});
@@ -343,17 +411,46 @@ function schedFixed(todo){
   const start=M===today.slice(0,7)?today:M+'-01';
   Object.keys(by).forEach(rid=>{
     const R=rd(rid);
-    let cur=start;while(isOff(cur))cur=addDays(cur,1);
+    const cap=Math.max(1,R.cap||250);
+    // Remainder rule: only open an extra day when leftover > 100 m.
+    // Soft room is +100 so a merged chunk (up to cap+100) still fits on one day.
+    const soft=100;
+    const remaining=(d)=>cap+soft-load_(d,rid);
+    let cur=start;while(isOff(cur)||!avail(rid,cur))cur=addDays(cur,1);
     by[rid].sort((a,b)=>(a.order||0)-(b.order||0)).forEach(r=>{
-      const es=[];let rem=r.meters,g=0;
+      const es=[];let g=0;
+      // Split only when the route exceeds this reader's daily capacity.
+      const chunks=[];
+      let rem=r.meters;
       while(rem>0){
-        const need=r.meters<=R.cap?r.meters:1;
-        while((!avail(rid,cur)||isOff(cur)||R.cap-load_(cur,rid)<need)&&g++<200)cur=addDays(cur,1);
+        const ch=Math.min(rem,cap);
+        chunks.push(ch);
+        rem-=ch;
+      }
+      // If the last piece is 100 meters or less, fold it into the previous day
+      // (e.g. 568 @ 250 cap → 250+318 on 2 days, not 250+250+68 on 3 days).
+      if(chunks.length>1&&chunks[chunks.length-1]<=100){
+        chunks[chunks.length-2]+=chunks.pop();
+      }
+      for(let i=0;i<chunks.length;i++){
+        const need=chunks[i];
+        // Pack onto the current day when enough capacity remains.
+        // Advance only if the day is closed or the chunk no longer fits.
+        while((!avail(rid,cur)||isOff(cur)||remaining(cur)<need)&&g++<200){
+          cur=addDays(cur,1);
+        }
         if(g>=200)return;
-        const ch=Math.min(rem,R.cap-load_(cur,rid)),t={id:uid(),name:r.name,meters:ch,parent:r.id};
+        const t={id:uid(),name:r.name,meters:need,code:r.code,parent:r.id};
         S.rr.push(t);
         const e={id:uid(),routeId:t.id,parent:r.id,readerId:rid,date:cur,status:0,note:''};
-        S.sched.push(e);es.push({e,t});rem-=ch;
+        S.sched.push(e);es.push({e,t});
+        // Keep the same day when capacity is still left so the next route
+        // can pack in (e.g. 230+33 under a 350 cap). Always advance between
+        // chunks of a multi-day split of the same route.
+        if(i<chunks.length-1||remaining(cur)<1){
+          cur=addDays(cur,1);
+          while(isOff(cur)||!avail(rid,cur))cur=addDays(cur,1);
+        }
       }
       if(es.length===1){es[0].e.routeId=r.id;delete es[0].e.parent;S.rr=S.rr.filter(t=>t!==es[0].t)}
       else es.forEach((z,i)=>{z.t.name=`${r.name} (part ${i+1} of ${es.length})`;z.e.note=`${z.t.meters} of ${r.meters} meters`});
@@ -369,9 +466,294 @@ $('#mdlg').addEventListener('click',e=>{if(e.target.closest('button'))$('#mdlg')
 $('#plist').onclick=()=>{
   const a=S.sched.filter(x=>(!fR||x.readerId===fR)&&(fS===''||String(x.status)===fS)).sort((p,q)=>p.date.localeCompare(q.date));
   if(!a.length)return toast('Nothing scheduled to print.');
-  const rows=a.map(x=>{const dt=new Date(x.date+'T00:00'),r=rt(x.routeId);return `<tr><td>${dt.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</td><td>${esc(r.name)}</td><td>${r.meters}</td><td>${esc(rd(x.readerId).name)}</td><td>${ST[x.status]}</td><td>${esc(x.note||'')}</td></tr>`}).join('');
-  $('#sheets').innerHTML=`<section class="sheet"><h2>Meter Reading Schedule</h2><div class="meta"><div><b>Entries:</b> ${a.length}</div><div><b>Printed:</b> ${today}</div></div><table class="rows"><tr><th>Date</th><th>Route / area</th><th>Meters</th><th>Reader</th><th>Status</th><th>Notes</th></tr>${rows}</table></section>`;
+  const rows=a.map(x=>{const dt=new Date(x.date+'T00:00'),r=rt(x.routeId);return `<tr><td>${dt.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})}</td><td>${esc(routeNo(r))}</td><td>${esc(r.name)}</td><td>${r.meters}</td><td>${esc(rd(x.readerId).name)}</td><td>${ST[x.status]}</td><td>${esc(x.note||'')}</td></tr>`}).join('');
+  $('#sheets').innerHTML=`<section class="sheet"><h2>Meter Reading Schedule</h2><div class="meta"><div><b>Entries:</b> ${a.length}</div><div><b>Printed:</b> ${today}</div></div><table class="rows"><tr><th>Date</th><th>Route No.</th><th>Route / area</th><th>Meters</th><th>Reader</th><th>Status</th><th>Notes</th></tr>${rows}</table></section>`;
   document.body.classList.add('ps');window.scrollTo(0,0);
+};
+$('#pex').onclick=()=>{
+  const a=S.sched.filter(x=>(!fR||x.readerId===fR)&&(fS===''||String(x.status)===fS)).sort((p,q)=>p.date.localeCompare(q.date));
+  if(!a.length)return toast('Nothing scheduled to export.');
+  const cell=v=>'<td>'+String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</td>';
+  const header=['Date','Route No.','Route / area','Meters','Reader','Day load','Status','Notes'];
+  const rows=a.map(x=>{
+    const r=rt(x.routeId),L=load_(x.date,x.readerId),c=rd(x.readerId).cap;
+    const dt=new Date(x.date+'T00:00').toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+    return '<tr>'+[dt,routeNo(r),r.name,r.meters,rd(x.readerId).name,L+'/'+c,ST[x.status],x.note||''].map(cell).join('')+'</tr>';
+  }).join('');
+  const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Schedule</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><table border="1"><thead><tr>'+header.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></body></html>';
+  const blob=new Blob(['\ufeff'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const ael=document.createElement('a');
+  ael.href=URL.createObjectURL(blob);
+  ael.download='meter-reading-schedule-'+today+'.xls';
+  ael.click();
+  URL.revokeObjectURL(ael.href);
+  toast(`Exported ${a.length} schedule${a.length>1?'s':''} to Excel (.xls).`);
+};
+// --- Actual reading dates ---
+function parseActualDate(s){
+  s=String(s||'').trim();
+  if(!s)return '';
+  // ISO or yyyy-mm-dd
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  // dd/mm/yyyy or mm/dd/yyyy
+  let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m){
+    const a=+m[1],b=+m[2],y=m[3];
+    // If first number > 12 treat as day/month/year (common outside US)
+    if(a>12)return y+'-'+String(b).padStart(2,'0')+'-'+String(a).padStart(2,'0');
+    // Otherwise treat as month/day/year
+    return y+'-'+String(a).padStart(2,'0')+'-'+String(b).padStart(2,'0');
+  }
+  // "Nov 7, 2026" / "November 7 2026" / "7 Nov 2026"
+  // Avoid bare year-only strings (they become Jan 1)
+  if(/^\d{4}$/.test(s))return '';
+  const d=new Date(s);
+  if(!isNaN(d.getTime())&&d.getFullYear()>2000){
+    // Use UTC components if the string parsed as UTC midnight to avoid timezone day-shift
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  return '';
+}
+function parseActuals(txt){
+  const out=[];
+  txt.split(/\r?\n/).forEach(line=>{
+    line=line.trim();
+    if(!line)return;
+    // Prefer tab / semicolon so commas inside "Nov 7, 2026" stay intact
+    let c;
+    if(line.includes('\t'))c=line.split('\t').map(s=>s.trim()).filter(Boolean);
+    else if(line.includes(';'))c=line.split(';').map(s=>s.trim()).filter(Boolean);
+    else {
+      // Comma-separated: try to pull a date token that may itself contain a comma
+      const dateMatch=line.match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}|\d{4}-\d{2}-\d{2})/i);
+      if(dateMatch){
+        const dateStr=dateMatch[1];
+        const before=line.slice(0,dateMatch.index).replace(/,+\s*$/,'').trim();
+        const parts=before.split(',').map(s=>s.trim()).filter(Boolean);
+        c=parts.concat([dateStr]);
+      } else {
+        c=line.split(',').map(s=>s.trim()).filter(Boolean);
+      }
+    }
+    if(c.length<2)return;
+    // skip header
+    if(/route/i.test(c[0])&&/date|reader|actual/i.test(c.slice(1).join(' ')))return;
+    let dateStr='', reader='';
+    for(let i=c.length-1;i>=1;i--){
+      const p=parseActualDate(c[i]);
+      if(p){dateStr=p;reader=c.slice(1,i).join(' ').trim();break}
+    }
+    if(!dateStr)return;
+    const codeRaw=c[0];
+    out.push({code:codeRaw, codeKey:String(codeRaw).replace(/^0+/,''), date:dateStr, reader});
+  });
+  return out;
+}
+$('#act').onclick=()=>{
+  $('#at').value='';
+  $('#adlg').showModal();
+};
+$('#acx').onclick=()=>$('#adlg').close();
+$('#aclr').onclick=()=>{S.actuals=[];save();$('#adlg').close();toast('Actual reading dates cleared.')};
+$('#ago').onclick=()=>{
+  const rows=parseActuals($('#at').value);
+  if(!rows.length)return toast('No valid rows found. Need RouteID and a date.');
+  // merge: replace existing for same code+date, or just append unique
+  const key=a=>a.codeKey+'|'+a.date;
+  const map=new Map(S.actuals.map(a=>[key(a),a]));
+  rows.forEach(r=>map.set(key(r),r));
+  S.actuals=[...map.values()].sort((a,b)=>a.date.localeCompare(b.date)||a.codeKey.localeCompare(b.codeKey));
+  save();$('#adlg').close();
+  toast(`Imported ${rows.length} actual reading date${rows.length>1?'s':''}. Total stored: ${S.actuals.length}.`);
+};
+// --- Gantt report ---
+$('#pgan').onclick=()=>{
+  $('#gr').innerHTML='<option value="">All readers</option>'+S.readers.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  if(fR)$('#gr').value=fR;
+  const routeOpts=S.routes.slice().sort((a,b)=>String(routeNo(a)).localeCompare(String(routeNo(b)),undefined,{numeric:true}));
+  $('#groute').innerHTML='<option value="">All routes</option>'+routeOpts.map(r=>`<option value="${r.id}">${esc(routeNo(r))} — ${esc(r.name)}</option>`).join('');
+  const ds=S.sched.map(x=>x.date).sort();
+  $('#gf').value=ds[0]||today;
+  $('#gt').value=ds[ds.length-1]||today;
+  $('#gdlg').showModal();
+};
+$('#gcx').onclick=()=>$('#gdlg').close();
+function clusterOf(code){
+  const s=String(code||'');
+  if(s.length>=2)return s.slice(0,2);
+  return '—';
+}
+$('#ggo').onclick=()=>{
+  const f=$('#gf').value,t=$('#gt').value||f,rid=$('#gr').value,routeFilter=$('#groute').value;
+  const showWE=$('#gwe').checked, showAct=$('#gact').checked, showClus=$('#gclus').checked;
+  const sortBy=$('#gsort').value, cellSz=Math.max(14,Math.min(32,+$('#gsize').value||20));
+  if(!f||t<f)return toast('Check the dates.');
+  const days=[];
+  for(let d=new Date(f+'T00:00');ymd(d)<=t;d.setDate(d.getDate()+1))days.push(ymd(d));
+  if(days.length>90)return toast('Please limit the range to about 3 months for a readable Gantt.');
+  const items=S.sched.filter(x=>{
+    if(x.date<f||x.date>t)return false;
+    if(rid&&x.readerId!==rid)return false;
+    if(routeFilter){
+      const oid=x.parent||x.routeId;
+      if(oid!==routeFilter&&x.routeId!==routeFilter)return false;
+    }
+    return true;
+  });
+  if(!items.length)return toast('No schedules found for that selection.');
+  const byOrig={};
+  items.forEach(x=>{
+    const oid=x.parent||x.routeId;
+    (byOrig[oid]=byOrig[oid]||[]).push(x);
+  });
+  const readerName=rid?rd(rid).name:'';
+  const routeLabel=routeFilter?(routeNo(S.routes.find(r=>r.id===routeFilter)||{})+' — '+(S.routes.find(r=>r.id===routeFilter)||{}).name):'';
+  let rows=Object.keys(byOrig).map(oid=>{
+    const list=byOrig[oid].sort((a,b)=>a.date.localeCompare(b.date));
+    const first=list[0];
+    const orig=S.routes.find(r=>r.id===oid)||rt(first.routeId);
+    const dates=list.map(x=>x.date);
+    const start=dates[0], end=dates[dates.length-1];
+    const daySet=new Set(dates);
+    const codeKey=String(routeNo(orig)).replace(/^0+/,'');
+    const acts=showAct?S.actuals.filter(a=>{
+      const codeOk=a.codeKey===codeKey||a.code===routeNo(orig)||a.code===String(orig.code||'');
+      if(!codeOk)return false;
+      if(readerName&&a.reader){
+        const ar=a.reader.toLowerCase(), rn=readerName.toLowerCase();
+        if(!(ar.includes(rn.split(',')[0].trim())||rn.includes(ar.split(',')[0].trim())||ar===rn))return false;
+      }
+      return true;
+    }):[];
+    const actSet=new Set(acts.map(a=>a.date));
+    return {
+      cluster:clusterOf(routeNo(orig)),
+      code:routeNo(orig),
+      name:orig.name,
+      meters:orig.meters||list.reduce((s,x)=>s+rt(x.routeId).meters,0),
+      reader:rd(first.readerId).name,
+      start,end,
+      daysCount:dates.length,
+      daySet,actSet,acts
+    };
+  });
+  const sorters={
+    date:(a,b)=>a.start.localeCompare(b.start)||String(a.code).localeCompare(String(b.code)),
+    code:(a,b)=>String(a.code).localeCompare(String(b.code),undefined,{numeric:true}),
+    cluster:(a,b)=>String(a.cluster).localeCompare(String(b.cluster))||String(a.code).localeCompare(String(b.code),undefined,{numeric:true}),
+    reader:(a,b)=>a.reader.localeCompare(b.reader)||a.start.localeCompare(b.start),
+    meters:(a,b)=>b.meters-a.meters||String(a.code).localeCompare(String(b.code))
+  };
+  rows.sort(sorters[sortBy]||sorters.date);
+
+  const totalMeters=rows.reduce((s,r)=>s+r.meters,0);
+  const readers=new Set(rows.map(r=>r.reader));
+  const workingDays=days.filter(d=>new Date(d+'T00:00').getDay()!==0&&!isHol(d)).length;
+  const caps=(rid?[rd(rid)]:S.readers).map(r=>r.cap).filter(Boolean);
+  const target=caps.length?(Math.min(...caps)===Math.max(...caps)?String(caps[0]):Math.min(...caps)+'-'+Math.max(...caps)):'—';
+
+  const months=[];
+  days.forEach(d=>{
+    const mo=d.slice(0,7);
+    if(!months.length||months[months.length-1].key!==mo)months.push({key:mo,label:new Date(d+'T00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'}).toUpperCase(),count:1});
+    else months[months.length-1].count++;
+  });
+
+  const dayNames=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  let dayHead1='',dayHead2='';
+  months.forEach(m=>{dayHead1+=`<th class="gantt-cell" colspan="${m.count}" style="text-align:center;background:#1e4e8c!important;color:#fff;font-size:11px">${m.label}</th>`});
+  days.forEach(d=>{
+    const dt=new Date(d+'T00:00');
+    const wk=dt.getDay();
+    const isWE=wk===0||wk===6;
+    const bg=showWE&&isWE?'#f5e6a8':'#2a5f9e';
+    const fg=showWE&&isWE?'#333':'#fff';
+    dayHead2+=`<th class="gantt-cell" style="width:${cellSz}px;font-size:9px;padding:2px 0;text-align:center;background:${bg}!important;color:${fg}">${dt.getDate()}<br>${dayNames[wk]}</th>`;
+  });
+
+  const body=rows.map(r=>{
+    let cells='';
+    days.forEach(d=>{
+      const dt=new Date(d+'T00:00');
+      const isWE=dt.getDay()===0||dt.getDay()===6;
+      const planned=r.daySet.has(d);
+      const actual=showAct&&r.actSet.has(d);
+      let bg=showWE&&isWE?'#faf3d0':'#fff';
+      if(planned&&actual)bg='#2e7d32';
+      else if(planned)bg='#1976d2';
+      else if(actual)bg='#f9a825';
+      cells+=`<td class="gantt-cell" style="width:${cellSz}px;height:${cellSz}px;padding:0;border:1px solid #999;background:${bg}!important;-webkit-print-color-adjust:exact;print-color-adjust:exact" title="${d}${planned?' · planned':''}${actual?' · actual':''}"></td>`;
+    });
+    return `<tr>
+      ${showClus?`<td style="font-size:11px;text-align:center">${esc(r.cluster)}</td>`:''}
+      <td style="font-size:11px">${esc(r.code)}</td>
+      <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.name)}">${esc(r.name)}</td>
+      <td style="font-size:11px;text-align:right">${r.meters.toLocaleString()}</td>
+      <td style="font-size:11px">${esc(r.reader)}</td>
+      <td style="font-size:10px">${r.start.slice(5)}</td>
+      <td style="font-size:10px">${r.end.slice(5)}</td>
+      <td style="font-size:11px;text-align:center">${r.daysCount}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const legend=`<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;margin:8px 0 4px;align-items:center">
+    <span><span class="gantt-cell" style="display:inline-block;width:14px;height:14px;background:#1976d2!important;border:1px solid #ccc;vertical-align:middle;margin-right:4px"></span>Planned</span>
+    ${showAct?`<span><span class="gantt-cell" style="display:inline-block;width:14px;height:14px;background:#f9a825!important;border:1px solid #ccc;vertical-align:middle;margin-right:4px"></span>Actual only</span>
+    <span><span class="gantt-cell" style="display:inline-block;width:14px;height:14px;background:#2e7d32!important;border:1px solid #ccc;vertical-align:middle;margin-right:4px"></span>Planned + Actual</span>`:''}
+    ${showWE?`<span><span class="gantt-cell" style="display:inline-block;width:14px;height:14px;background:#faf3d0!important;border:1px solid #ccc;vertical-align:middle;margin-right:4px"></span>Weekend</span>`:''}
+    <span class="sub">Actuals stored: ${S.actuals.length}</span>
+  </div>`;
+
+  const cards=`<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+    <div style="background:#e8f0fe;border-radius:12px;padding:10px 16px;min-width:110px;text-align:center"><div style="font-size:22px;font-weight:700;color:#1a73e8">${rows.length}</div><div style="font-size:11px;color:#555">TOTAL ROUTES</div></div>
+    <div style="background:#e6f4ea;border-radius:12px;padding:10px 16px;min-width:110px;text-align:center"><div style="font-size:22px;font-weight:700;color:#137333">${totalMeters.toLocaleString()}</div><div style="font-size:11px;color:#555">TOTAL METERS</div></div>
+    <div style="background:#fce8e6;border-radius:12px;padding:10px 16px;min-width:110px;text-align:center"><div style="font-size:22px;font-weight:700;color:#c5221f">${readers.size}</div><div style="font-size:11px;color:#555">METER READERS</div></div>
+    <div style="background:#fef7e0;border-radius:12px;padding:10px 16px;min-width:110px;text-align:center"><div style="font-size:22px;font-weight:700;color:#b06000">${workingDays}</div><div style="font-size:11px;color:#555">WORKING DAYS</div></div>
+    <div style="background:#f3e8fd;border-radius:12px;padding:10px 16px;min-width:110px;text-align:center"><div style="font-size:22px;font-weight:700;color:#7627bb">${target}</div><div style="font-size:11px;color:#555">TARGET METERS/DAY</div></div>
+  </div>`;
+
+  const html=`<section class="sheet" style="max-width:100%;overflow:auto">
+    <div class="row noprint" style="margin-bottom:10px;justify-content:space-between;align-items:center">
+      <span class="sub">Gantt preview · use the Print button in the bar above or below</span>
+      <span class="row"><button class="p" onclick="window.print()">Print Gantt</button><button onclick="document.body.classList.remove('ps')">Close</button></span>
+    </div>
+    <h2 style="margin:0 0 8px">Meter Reading Gantt Schedule${readerName?' — '+esc(readerName):''}${routeFilter?' · Route '+esc(routeNo(S.routes.find(r=>r.id===routeFilter)||{})):''}</h2>
+    <div class="meta">
+      <div><b>Reader:</b> ${readerName?esc(readerName):'All readers'}</div>
+      <div><b>Route:</b> ${routeFilter?esc(routeNo(S.routes.find(r=>r.id===routeFilter)||{})+' — '+(S.routes.find(r=>r.id===routeFilter)||{name:''}).name):'All routes'}</div>
+      <div><b>Period:</b> ${f} to ${t}</div>
+      <div><b>Printed:</b> ${today}</div>
+    </div>
+    ${cards}
+    ${legend}
+    <div style="overflow-x:auto">
+    <table class="rows" style="border-collapse:collapse;font-size:11px;white-space:nowrap">
+      <thead>
+        <tr>
+          ${showClus?'<th rowspan="2">CLUSTER</th>':''}
+          <th rowspan="2">ROUTE ID</th>
+          <th rowspan="2">ROUTE / AREA</th>
+          <th rowspan="2">METERS</th>
+          <th rowspan="2">READER</th>
+          <th colspan="2">SCHEDULE</th>
+          <th rowspan="2">DAYS</th>
+          ${dayHead1}
+        </tr>
+        <tr>
+          <th>START</th><th>END</th>
+          ${dayHead2}
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+    </div>
+  </section>`;
+
+  $('#sheets').innerHTML=html;
+  $('#gdlg').close();
+  document.body.classList.add('ps');
+  window.scrollTo(0,0);
 };
 $('#pgo2').onclick=()=>window.print();
 $('#pcl').onclick=()=>document.body.classList.remove('ps');
@@ -389,8 +771,8 @@ $('#sgo').onclick=()=>{
     if(!a.length)return;
     const tot=a.reduce((s,x)=>s+rt(x.routeId).meters,0);
     const offs=S.off.filter(o=>o.readerId===r.id&&o.from<=t&&o.to>=f).map(o=>(o.from===o.to?o.from:o.from+' to '+o.to)+(o.reason?' ('+esc(o.reason)+')':'')).join('; ');
-    const rows=a.map(x=>{const dt=new Date(x.date+'T00:00');return `<tr><td>${dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</td><td>${dt.toLocaleDateString(undefined,{weekday:'short'})}</td><td>${esc(rt(x.routeId).name)}</td><td>${rt(x.routeId).meters}</td><td>${load_(x.date,r.id)}/${r.cap}</td><td>${ST[x.status]}</td><td>${esc(x.note||'')}</td></tr>`}).join('');
-    h+=`<section class="sheet"><h2>Meter Reader Schedule</h2><div class="meta"><div><b>Reader:</b> ${esc(r.name)}</div><div><b>Period:</b> ${f} to ${t}</div><div><b>Routes:</b> ${a.length}</div><div><b>Total meters:</b> ${tot.toLocaleString()}</div></div>${offs?`<div style="font-size:12px;margin-bottom:6px"><b>Unavailable:</b> ${offs}</div>`:''}<table class="rows"><tr><th>Date</th><th>Day</th><th>Route / area</th><th>Meters</th><th>Day load</th><th>Status</th><th>Notes</th></tr>${rows}</table><div class="sig"><span>Prepared by: ____________</span><span>Received by (reader): ____________</span><span>Printed: ${today}</span></div></section>`;
+    const rows=a.map(x=>{const dt=new Date(x.date+'T00:00'),rte=rt(x.routeId);return `<tr><td>${dt.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</td><td>${dt.toLocaleDateString(undefined,{weekday:'short'})}</td><td>${esc(routeNo(rte))}</td><td>${esc(rte.name)}</td><td>${rte.meters}</td><td>${load_(x.date,r.id)}/${r.cap}</td><td>${ST[x.status]}</td><td>${esc(x.note||'')}</td></tr>`}).join('');
+    h+=`<section class="sheet"><h2>Meter Reader Schedule</h2><div class="meta"><div><b>Reader:</b> ${esc(r.name)}</div><div><b>Period:</b> ${f} to ${t}</div><div><b>Routes:</b> ${a.length}</div><div><b>Total meters:</b> ${tot.toLocaleString()}</div></div>${offs?`<div style="font-size:12px;margin-bottom:6px"><b>Unavailable:</b> ${offs}</div>`:''}<table class="rows"><tr><th>Date</th><th>Day</th><th>Route No.</th><th>Route / area</th><th>Meters</th><th>Day load</th><th>Status</th><th>Notes</th></tr>${rows}</table><div class="sig"><span>Prepared by: ____________</span><span>Received by (reader): ____________</span><span>Printed: ${today}</span></div></section>`;
   });
   if(!h)return toast('No schedules found for that selection.');
   $('#sheets').innerHTML=h;$('#sdlg').close();document.body.classList.add('ps');window.scrollTo(0,0);
@@ -517,7 +899,7 @@ $('#pgo').onclick=()=>{
     for(let p=0;p<pages;p++){
       let rows='';
       for(let i=p*n+1;i<=Math.min((p+1)*n,r.meters);i++)rows+=`<tr><td>${i}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
-      h+=`<section class="sheet"><h2>Meter Reading Sheet</h2><div class="meta"><div><b>Route / area:</b> ${esc(r.name)}</div><div><b>Meter reader:</b> ${esc(rd(x.readerId).name)}</div><div><b>Reading date:</b> ${d.toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div><div><b>Meters assigned:</b> ${r.meters} (page ${p+1} of ${pages})</div></div><table class="rows"><tr><th>#</th><th>Account no.</th><th>Meter no.</th><th>Previous</th><th>Present</th><th>Time</th><th>Remarks</th></tr>${rows}</table><div class="sig"><span>Issued by: ____________</span><span>Received by: ____________</span><span>Returned on: __________</span></div></section>`;
+      h+=`<section class="sheet"><h2>Meter Reading Sheet</h2><div class="meta"><div><b>Route No.:</b> ${esc(routeNo(r))}</div><div><b>Route / area:</b> ${esc(r.name)}</div><div><b>Meter reader:</b> ${esc(rd(x.readerId).name)}</div><div><b>Reading date:</b> ${d.toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div><div><b>Meters assigned:</b> ${r.meters} (page ${p+1} of ${pages})</div></div><table class="rows"><tr><th>#</th><th>Account no.</th><th>Meter no.</th><th>Previous</th><th>Present</th><th>Time</th><th>Remarks</th></tr>${rows}</table><div class="sig"><span>Issued by: ____________</span><span>Received by: ____________</span><span>Returned on: __________</span></div></section>`;
     }
   });
   $('#sheets').innerHTML=h;$('#pdlg').close();document.body.classList.add('ps');window.scrollTo(0,0);
